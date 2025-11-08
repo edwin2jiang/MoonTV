@@ -12,6 +12,7 @@ import RuntimeConfig from '@/lib/runtime';
 import { GlobalErrorIndicator } from '../components/GlobalErrorIndicator';
 import { SiteProvider } from '../components/SiteProvider';
 import { ThemeProvider } from '../components/ThemeProvider';
+import AuthGate from '../components/AuthGate';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -114,7 +115,7 @@ export default async function RootLayout({
           disableTransitionOnChange
         >
           <SiteProvider siteName={siteName} announcement={announcement}>
-            {children}
+            <AuthGate>{children}</AuthGate>
             <GlobalErrorIndicator />
           </SiteProvider>
         </ThemeProvider>

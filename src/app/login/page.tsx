@@ -76,16 +76,32 @@ function LoginPageClient() {
   const [loading, setLoading] = useState(false);
   const [shouldAskUsername, setShouldAskUsername] = useState(false);
   const [enableRegister, setEnableRegister] = useState(false);
+  const [storageType, setStorageType] = useState<'localstorage' | 'redis' | 'd1' | 'upstash' | undefined>(
+    undefined
+  );
   const { siteName } = useSite();
 
   // 在客户端挂载后设置配置
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const storageType = (window as any).RUNTIME_CONFIG?.STORAGE_TYPE;
-      setShouldAskUsername(storageType && storageType !== 'localstorage');
+      const st = (window as any).RUNTIME_CONFIG?.STORAGE_TYPE as
+        | 'localstorage'
+        | 'redis'
+        | 'd1'
+        | 'upstash'
+        | undefined;
+      setStorageType(st);
+      setShouldAskUsername(Boolean(st) && st !== 'localstorage');
       setEnableRegister(
         Boolean((window as any).RUNTIME_CONFIG?.ENABLE_REGISTER)
       );
+
+      // 已登录则直接跳转
+      const loggedIn = window.localStorage.getItem('moontv_logged_in') === 'true';
+      if (loggedIn) {
+        const redirect = searchParams.get('redirect') || '/';
+        router.replace(redirect);
+      }
     }
   }, []);
 
@@ -97,23 +113,37 @@ function LoginPageClient() {
 
     try {
       setLoading(true);
-      const res = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          password,
-          ...(shouldAskUsername ? { username } : {}),
-        }),
-      });
-
-      if (res.ok) {
-        const redirect = searchParams.get('redirect') || '/';
-        router.replace(redirect);
-      } else if (res.status === 401) {
-        setError('密码错误');
+      // localstorage 模式：仅前端校验，默认密码为 edwin
+      if (!shouldAskUsername || storageType === 'localstorage') {
+        if (password === 'edwin') {
+          if (typeof window !== 'undefined') {
+            window.localStorage.setItem('moontv_logged_in', 'true');
+          }
+          const redirect = searchParams.get('redirect') || '/';
+          router.replace(redirect);
+        } else {
+          setError('密码错误');
+        }
       } else {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error ?? '服务器错误');
+        // 非 localstorage 模式：保持原有后端登录流程
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            password,
+            ...(shouldAskUsername ? { username } : {}),
+          }),
+        });
+
+        if (res.ok) {
+          const redirect = searchParams.get('redirect') || '/';
+          router.replace(redirect);
+        } else if (res.status === 401) {
+          setError('密码错误');
+        } else {
+          const data = await res.json().catch(() => ({}));
+          setError(data.error ?? '服务器错误');
+        }
       }
     } catch (error) {
       setError('网络错误，请稍后重试');
